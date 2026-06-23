@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FactCheck Web — Vérification croisée Grok / Gemini</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --bg-panel: #151b23;
+  --bg-input: #1c2430;
+  --border: #2a333f;
+  --text: #e6edf3;
+  --text-dim: #8b98a5;
+  --accent-grok: #7c5cff;
+  --accent-gemini: #2bb3a3;
+  --vrai: #3fb950;
+  --faux: #f85149;
+  --trompeur: #d29922;
+  --nv: #6e7681;
+  --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --sans: "Inter", -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+
+header {
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+header h1 {
+  font-size: 19px;
+  font-weight: 650;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+header h1 span {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-left: 10px;
+}
+
+.privacy-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+.keys-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.key-field {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.key-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-grok { background: var(--accent-grok); }
+.dot-gemini { background: var(--accent-gemini); }
+
+.key-field input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.key-field input:focus { outline: 1px solid var(--text-dim); }
+
+nav.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+nav.tabs button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+
+nav.tabs button.active {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 24px;
+}
+
+.panel.hidden { display: none; }
+
+.panel input[type="text"], .panel input[type="file"] {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 11px 12px;
+  font-family: var(--sans);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.panel-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+
+select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+button.action {
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 650;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+
+button.action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+button.action.recording {
+  background: var(--faux);
+  color: white;
+}
+
+.status-line {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* ─── Flux de résultats ─────────────────────────────────────────── */
+
+#feed { display: flex; flex-direction: column; gap: 14px; }
+
+.transcript-line {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.claim-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+.claim-header {
+  padding: 14px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.claim-header .eyebrow {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.verdicts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.verdict-col {
+  padding: 16px 18px;
+  border-right: 1px solid var(--border);
+}
+.verdict-col:last-child { border-right: none; }
+
+.verdict-provider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.verdict-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+  font-family: var(--mono);
+}
+
+.label-VRAI, .label-GLOBALEMENT_VRAI { background: rgba(63,185,80,0.15); color: var(--vrai); }
+.label-FAUX { background: rgba(248,81,73,0.15); color: var(--faux); }
+.label-TROMPEUR { background: rgba(210,153,34,0.15); color: var(--trompeur); }
+.label-NON_VÉRIFIABLE, .label-ERREUR { background: rgba(110,118,129,0.15); color: var(--nv); }
+
+.verdict-explanation { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+
+.verdict-sources { font-size: 11.5px; color: var(--text-dim); }
+.verdict-sources a { color: var(--text-dim); }
+
+.confidence-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.confidence-fill { height: 100%; background: currentColor; }
+
+.pending {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--mono);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FactCheck Web <span>vérification croisée en direct</span></h1>
+  <div class="privacy-note">Vos clés API restent en mémoire de votre navigateur — jamais stockées sur le serveur.</div>
+</header>
+
+<main>
+
+  <div class="keys-row">
+    <div class="key-field">
+      <label><span class="dot dot-grok"></span> Clé API Grok (xAI)</label>
+      <input type="password" id="grokKey" placeholder="xai-...">
+    </div>
+    <div class="key-field">
+      <label><span class="dot dot-gemini"></span> Clé API Gemini (Google AI)</label>
+      <input type="password" id="geminiKey" placeholder="AIza...">
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="active" data-tab="upload">Fichier</button>
+    <button data-tab="url">Lien YouTube / Twitch</button>
+    <button data-tab="live">Micro en direct</button>
+  </nav>
+
+  <div class="panel" id="panel-upload">
+    <input type="file" id="fileInput" accept="audio/*,video/*">
+    <div class="panel-row">
+      <select id="modelUpload">
+        <option value="base">Whisper — base (rapide)</option>
+        <option value="small">Whisper — small (meilleure qualité)</option>
+        <option value="medium">Whisper — medium (lent, précis)</option>
+      </select>
+      <button class="action" id="btnUpload">Analyser le fichier</button>
+    </div>
+    <div class="status-line" id="statusUpload"></div>
+  </div>
+
+  <div class="panel hidden" id="panel-url">
+    <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=... ou https://twitch.tv/...">
+    <div class="panel-row">
+      <select id="modelUrl">
+        <option value="base">Whisper — base (rapide)</option>
+        <option value="small">Whisper — small (meilleure qualité)</option>
+        <option value="medium">Whisper — medium (lent, précis)</option>
+      </select>
+      <button class="action" id="btnUrl">Analyser le lien</button>
+    </div>
+    <div class="status-line" id="statusUrl"></div>
+  </div>
+
+  <div class="panel hidden" id="panel-live">
+    <p style="font-size:13px;color:var(--text-dim);margin-top:0;">Capture le micro de votre navigateur par blocs de 12 secondes. Une légère latence est normale.</p>
+    <div class="panel-row">
+      <select id="modelLive">
+        <option value="base">Whisper — base (rapide)</option>
+        <option value="small">Whisper — small</option>
+      </select>
+      <button class="action" id="btnLive">Démarrer l'écoute</button>
+    </div>
+    <div class="status-line" id="statusLive"></div>
+  </div>
+
+  <div id="feed">
+    <div class="empty-state" id="emptyState">Aucune analyse en cours. Choisissez une source audio ci-dessus.</div>
+  </div>
+
+</main>
+
+<script>
+const API_BASE = ""; // même origine
+
+// ─── Gestion des onglets ───────────────────────────────────────────
+document.querySelectorAll("nav.tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.add("hidden"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.remove("hidden");
+  });
+});
+
+function getKeys() {
+  return {
+    grok_key: document.getElementById("grokKey").value.trim(),
+    gemini_key: document.getElementById("geminiKey").value.trim(),
+  };
+}
+
+function clearEmptyState() {
+  const el = document.getElementById("emptyState");
+  if (el) el.remove();
+}
+
+function addTranscriptLine(text) {
+  clearEmptyState();
+  const feed = document.getElementById("feed");
+  const div = document.createElement("div");
+  div.className = "transcript-line";
+  div.textContent = "» " + text;
+  feed.appendChild(div);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+const pendingCards = {};
+
+function addClaimPending(claim) {
+  clearEmptyState();
+  const feed = document.getElementById("feed");
+  const card = document.createElement("div");
+  card.className = "claim-card";
+  card.innerHTML = `
+    <div class="claim-header"><span class="eyebrow">Affirmation détectée</span>${escapeHtml(claim)}</div>
+    <div class="verdicts-row">
+      <div class="verdict-col"><div class="verdict-provider"><span class="dot dot-grok"></span> Grok</div><div class="pending">Vérification en cours…</div></div>
+      <div class="verdict-col"><div class="verdict-provider"><span class="dot dot-gemini"></span> Gemini</div><div class="pending">Vérification en cours…</div></div>
+    </div>`;
+  feed.appendChild(card);
+  pendingCards[claim] = card;
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+function renderVerdict(claim, results) {
+  const card = pendingCards[claim];
+  if (!card) return;
+  const cols = card.querySelectorAll(".verdict-col");
+  const providers = { grok: cols[0], gemini: cols[1] };
+
+  for (const [provider, v] of Object.entries(results)) {
+    const col = providers[provider];
+    if (!col) continue;
+    const labelClass = "label-" + v.label.replace(/\s+/g, "_");
+    const pct = Math.round((v.confidence || 0) * 100);
+    col.innerHTML = `
+      <div class="verdict-provider"><span class="dot dot-${provider}"></span> ${provider}</div>
+      <span class="verdict-label ${labelClass}">${escapeHtml(v.label)}</span>
+      <div class="verdict-explanation">${escapeHtml(v.explanation)}</div>
+      ${v.sources && v.sources.length ? `<div class="verdict-sources">Sources : ${v.sources.map(escapeHtml).join(", ")}</div>` : ""}
+      <div class="confidence-bar" style="color:${pct >= 60 ? 'var(--vrai)' : pct >= 30 ? 'var(--trompeur)' : 'var(--faux)'}">
+        <div class="confidence-fill" style="width:${pct}%"></div>
+      </div>`;
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function openResultsSocket(jobId, statusEl) {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws/${jobId}`);
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "status") statusEl.textContent = msg.message;
+    else if (msg.type === "transcript") addTranscriptLine(msg.text);
+    else if (msg.type === "claim_detected") addClaimPending(msg.claim);
+    else if (msg.type === "verdict") renderVerdict(msg.claim, msg.results);
+    else if (msg.type === "done") statusEl.textContent = "Analyse terminée.";
+    else if (msg.type === "error") statusEl.textContent = "Erreur : " + msg.message;
+  };
+  return ws;
+}
+
+// ─── Mode 1 : Upload de fichier ─────────────────────────────────────
+document.getElementById("btnUpload").addEventListener("click", async () => {
+  const fileInput = document.getElementById("fileInput");
+  const statusEl = document.getElementById("statusUpload");
+  if (!fileInput.files.length) { statusEl.textContent = "Sélectionnez un fichier."; return; }
+
+  const { grok_key, gemini_key } = getKeys();
+  if (!grok_key && !gemini_key) { statusEl.textContent = "Renseignez au moins une clé API."; return; }
+
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  fd.append("grok_key", grok_key);
+  fd.append("gemini_key", gemini_key);
+  fd.append("model", document.getElementById("modelUpload").value);
+  fd.append("language", "fr");
+
+  statusEl.textContent = "Envoi du fichier…";
+  const resp = await fetch(`${API_BASE}/upload`, { method: "POST", body: fd });
+  const data = await resp.json();
+  if (data.job_id) openResultsSocket(data.job_id, statusEl);
+});
+
+// ─── Mode 2 : URL ────────────────────────────────────────────────────
+document.getElementById("btnUrl").addEventListener("click", async () => {
+  const url = document.getElementById("urlInput").value.trim();
+  const statusEl = document.getElementById("statusUrl");
+  if (!url) { statusEl.textContent = "Collez un lien."; return; }
+
+  const { grok_key, gemini_key } = getKeys();
+  if (!grok_key && !gemini_key) { statusEl.textContent = "Renseignez au moins une clé API."; return; }
+
+  const fd = new FormData();
+  fd.append("url", url);
+  fd.append("grok_key", grok_key);
+  fd.append("gemini_key", gemini_key);
+  fd.append("model", document.getElementById("modelUrl").value);
+  fd.append("language", "fr");
+
+  statusEl.textContent = "Lancement…";
+  const resp = await fetch(`${API_BASE}/from-url`, { method: "POST", body: fd });
+  const data = await resp.json();
+  if (data.job_id) openResultsSocket(data.job_id, statusEl);
+});
+
+// ─── Mode 3 : Micro live ─────────────────────────────────────────────
+let liveActive = false;
+let mediaRecorder, liveSocket;
+
+document.getElementById("btnLive").addEventListener("click", async () => {
+  const btn = document.getElementById("btnLive");
+  const statusEl = document.getElementById("statusLive");
+
+  if (liveActive) {
+    mediaRecorder && mediaRecorder.stop();
+    liveSocket && liveSocket.close();
+    liveActive = false;
+    btn.textContent = "Démarrer l'écoute";
+    btn.classList.remove("recording");
+    statusEl.textContent = "Arrêté.";
+    return;
+  }
+
+  const { grok_key, gemini_key } = getKeys();
+  if (!grok_key && !gemini_key) { statusEl.textContent = "Renseignez au moins une clé API."; return; }
+
+  const jobId = crypto.randomUUID();
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  liveSocket = new WebSocket(`${proto}://${location.host}/live/${jobId}`);
+
+  liveSocket.onopen = async () => {
+    liveSocket.send(JSON.stringify({
+      grok_key, gemini_key,
+      model: document.getElementById("modelLive").value,
+      language: "fr",
+    }));
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0 && liveSocket.readyState === WebSocket.OPEN) {
+          liveSocket.send(e.data);
+        }
+      };
+      mediaRecorder.start(12000); // bloc de 12 secondes
+      liveActive = true;
+      btn.textContent = "Arrêter l'écoute";
+      btn.classList.add("recording");
+      statusEl.textContent = "Écoute en cours…";
+    } catch (err) {
+      statusEl.textContent = "Accès au micro refusé : " + err.message;
+    }
+  };
+
+  liveSocket.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "transcript") addTranscriptLine(msg.text);
+    else if (msg.type === "claim_detected") addClaimPending(msg.claim);
+    else if (msg.type === "verdict") renderVerdict(msg.claim, msg.results);
+    else if (msg.type === "error") statusEl.textContent = "Erreur : " + msg.message;
+  };
+});
+</script>
+
+</body>
+</html>
